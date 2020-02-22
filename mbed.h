@@ -8,6 +8,7 @@
 #include <thread>
 #include <cstring>
 #include <mutex>
+#include <condition_variable>
 
 typedef enum {
   PTC0,
@@ -47,6 +48,9 @@ namespace sim {
   FILE *csv;
   std::thread ticker_thread_handle;
   std::mutex lock;
+  std::mutex wait_lock;
+  std::condition_variable wait_cv;
+
 
   typedef void (*Callback)();
   typedef struct {
@@ -58,7 +62,6 @@ namespace sim {
   void ticker_thread() {
     char line[128];
     for(;;) {
-      tick++;
       {
         std::lock_guard<std::mutex> guard(sim::lock);
         for(auto &item: callbacks) {
@@ -108,6 +111,8 @@ namespace sim {
       printf("\n");
 
       usleep(1000);
+      tick++;
+      wait_cv.notify_one();
     }
   }
 
@@ -164,8 +169,21 @@ class Ticker {
     }
 };
 
+void wait_us(int usec) {
+  uint64_t start = sim::tick;
+
+  std::unique_lock<std::mutex> guard(sim::wait_lock);
+  sim::wait_cv.wait(guard, [=] {
+    return sim::tick - start >= usec / 1000;
+  });
+}
+
+void wait_ms(int ms) {
+  wait_us(ms * 1000);
+}
+
 void wait(float sec) {
-  usleep(sec * 1000000);
+  wait_us(sec * 1000000);
 }
 
 
