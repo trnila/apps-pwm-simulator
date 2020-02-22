@@ -41,7 +41,6 @@ struct Pin {
 };
 
 struct Pin __pins[PinLast];
-
 uint64_t __tick;
 FILE *__csv;
 
@@ -69,15 +68,17 @@ std::vector<RegisteredCb> callbacks;
 class Ticker {
   public:
     void attach(void (*fn)(), float sec) {
-      callbacks.push_back({fn, sec * 1000});
+      callbacks.push_back({fn, (uint64_t) (sec * 1000)});
+    }
+
+    void attach_us(void (*fn)(), uint64_t usec) {
+      callbacks.push_back({fn, usec / 1000});
     }
 };
 
 void wait(float sec) {
   usleep(sec * 1000000);
 }
-
-
 
 void ticker_thread() {
   char line[128];
