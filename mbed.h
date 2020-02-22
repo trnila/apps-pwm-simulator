@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <thread>
 #include <cstring>
+#include <mutex>
 
 typedef enum {
   PTC0,
@@ -45,23 +46,25 @@ namespace sim {
   uint64_t tick;
   FILE *csv;
   std::thread ticker_thread_handle;
-
+  std::mutex lock;
 
   typedef void (*Callback)();
   typedef struct {
     Callback cb;
     uint64_t tick;
   } RegisteredCb;
-
   std::vector<RegisteredCb> callbacks;
 
   void ticker_thread() {
     char line[128];
     for(;;) {
       tick++;
-      for(auto &item: callbacks) {
-        if(tick % item.tick == 0) {
-          item.cb();
+      {
+        std::lock_guard<std::mutex> guard(sim::lock);
+        for(auto &item: callbacks) {
+          if(tick % item.tick == 0) {
+            item.cb();
+          }
         }
       }
 
@@ -151,10 +154,12 @@ public:
 class Ticker {
   public:
     void attach(void (*fn)(), float sec) {
+      std::lock_guard<std::mutex> guard(sim::lock);
       sim::callbacks.push_back({fn, (uint64_t) (sec * 1000)});
     }
 
     void attach_us(void (*fn)(), uint64_t usec) {
+      std::lock_guard<std::mutex> guard(sim::lock);
       sim::callbacks.push_back({fn, usec / 1000});
     }
 };
