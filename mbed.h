@@ -31,11 +31,19 @@ const char *pin_names[] {
 	"PTC8",
 };
 
-uint32_t on[PinLast];
-uint32_t off[PinLast];
-int states[PinLast];
-uint64_t tick;
-FILE *csv;
+struct Pin {
+  uint64_t start_t;
+  uint64_t change_t;
+  int prev_state;
+  int cur_state;
+  uint32_t period_ms;
+  uint32_t duty_ms;
+};
+
+struct Pin __pins[PinLast];
+
+uint64_t __tick;
+FILE *__csv;
 
 class DigitalOut {
 private:
@@ -45,7 +53,7 @@ private:
   DigitalOut(PinName name): name(name) {}
 
   DigitalOut& operator= (int value) {
-		states[name] = value;
+		__pins[name].cur_state = value;
     return *this;
   }
 };
@@ -74,38 +82,51 @@ void wait(float sec) {
 void ticker_thread() {
   char line[128];
 	for(;;) {
-		tick++;
+		__tick++;
 		for(auto &item: callbacks) {
-			if(tick % item.tick == 0) {
+			if(__tick % item.tick == 0) {
 				item.cb();
 			}
 		}
 
     int len = 0;
 		for(int i = 0; i < PinLast; i++) {
-			if(states[i]) {
-				on[i]++;
-			} else {
-				off[i]++;
-			}
-      len += sprintf(line + len, "%d", states[i]);
+      struct Pin *pin = &__pins[i];
+
+      if(pin->prev_state == 0 && pin->cur_state == 1) {
+        pin->period_ms = __tick - pin->start_t;
+        pin->duty_ms = pin->period_ms - (__tick - pin->change_t);
+        pin->start_t = __tick;
+
+      } else if(pin->prev_state == 1 && pin->cur_state == 0) {
+        pin->change_t = __tick;
+      }
+
+      pin->prev_state = pin->cur_state;
+
+      len += sprintf(line + len, "%d", pin->cur_state);
 			if(i + 1 != PinLast) {
         line[len++] = ',';
 			}
 		}
     line[len++] = '\n';
-    fwrite(line, len, 1, csv);
-    fflush(csv);
+    fwrite(line, len, 1, __csv);
+    fflush(__csv);
 
-		if(tick % 100 == 0) {
-			for(int i = 0; i < PinLast; i++) {
-				int value = ((float) on[i]) / (off[i] + on[i]) * 100;
-				printf("%3d ", value);
-			}
-			printf("\n");
-			memset(on, 0, sizeof(on));
-			memset(off, 0, sizeof(off));
-		}
+		for(int i = 0; i < PinLast; i++) {
+      struct Pin *pin = &__pins[i];
+      int active_percent = 0;
+      if(pin->period_ms != 0) {
+        active_percent = pin->duty_ms * 100 / pin->period_ms;
+      }
+
+      if(__tick - pin->start_t > 100) {
+        printf("--/-- (%3d%%)   ", pin->cur_state ? 100 : 0);
+      } else {
+        printf("%2d/%2d (%3d%%)   ", pin->duty_ms, pin->period_ms, active_percent);
+      }
+    }
+    printf("\n");
 
 		usleep(1000);
 	}
@@ -114,14 +135,14 @@ void ticker_thread() {
 
 int mmain();
 int main() {
-	csv = fopen("record.csv", "w");
+	__csv = fopen("record.csv", "w");
 	for(int i = 0; i < PinLast; i++) {
-		fprintf(csv, "%s", pin_names[i]);
+		fprintf(__csv, "%s", pin_names[i]);
 		if(i + 1 != PinLast) {
-			fprintf(csv, ",");
+			fprintf(__csv, ",");
 		}
 	}
-	fprintf(csv, "\n");
+	fprintf(__csv, "\n");
 
 	std::thread t(ticker_thread);
   mmain();
