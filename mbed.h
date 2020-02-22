@@ -164,11 +164,11 @@ void wait(float sec) {
 }
 
 
-int mmain();
+int your_main();
 int main() {
   sim::sim_init();
-  mmain();
+  your_main();
   printf("main returned...\n");
 }
 
-#define main mmain
+#define main your_main
