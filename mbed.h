@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <signal.h>
 #include <vector>
+#include <unistd.h>
 #include <stdint.h>
-#include <sys/time.h>
 #include <thread>
 #include <cstring>
 #include <mutex>
