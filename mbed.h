@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
-#include <unistd.h>
 #include <stdint.h>
 #include <thread>
-#include <cstring>
 #include <mutex>
+#include <chrono>
 #include <condition_variable>
 
 typedef enum {
@@ -21,6 +20,8 @@ typedef enum {
 } PinName;
 
 namespace sim {
+  using namespace std::chrono_literals;
+
   const char *pin_names[] {
     "PTC0",
     "PTC1",
@@ -60,6 +61,7 @@ namespace sim {
   void ticker_thread() {
     char line[128];
     for(;;) {
+      tick++;
       {
         std::lock_guard<std::mutex> guard(sim::lock);
         for(auto &item: callbacks) {
@@ -108,8 +110,7 @@ namespace sim {
       }
       printf("\n");
 
-      usleep(1000);
-      tick++;
+      std::this_thread::sleep_for(1ms);
       wait_cv.notify_one();
     }
   }
